@@ -1,0 +1,425 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// CORE DOMAIN: EXECUTION
+// =============================================
+
+model Task {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  state       String       @default("pending") // Was TaskState
+  priority    String       @default("medium") // Was TaskPriority
+  dueDate     DateTime?
+  
+  // Context Relations (Mutually Exclusive ideally, forced by App Logic)
+  projectId   String?
+  project     Project?     @relation(fields: [projectId], references: [id])
+  
+  hackathonId String?
+  hackathon   Hackathon?   @relation(fields: [hackathonId], references: [id])
+  
+  // Audit Trail
+  history     TaskEvent[]
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  completedAt DateTime?
+
+  @@index([projectId])
+  @@index([hackathonId])
+}
+
+// =============================================
+// CORE DOMAIN: CONTAINER
+// =============================================
+
+model Project {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  stage       String       @default("planning") // Was ProjectStage
+  deadline    DateTime?
+  
+  // Relations
+  tasks       Task[]
+  links       ProjectLink[]
+  notes       ProjectNote[]
+  noteLinks   NoteLink[]
+  
+  // Audit Trail
+  history     ProjectEvent[]
+
+  // Hackathon Linking (Project can be born from a hackathon)
+  originHackathonId String? @unique
+  originHackathon   Hackathon? @relation(fields: [originHackathonId], references: [id])
+  
+  // Calendar Events
+  calendarEvents    CalendarEvent[]
+
+  createdAt   DateTime     @default(now())
+  lastActivity DateTime    @default(now()) // For sorting
+}
+
+model Hackathon {
+  id                  String          @id @default(uuid())
+  name                String
+  organizer           String?
+  mode                String          @default("online") // Was HackathonMode
+  theme               String?
+  teamSize            Int             @default(1)
+  
+  // Dates
+  registrationDeadline DateTime?
+  submissionDeadline   DateTime?
+  eventStartDate       DateTime?   // Renamed from startDate
+  eventEndDate         DateTime?   // Renamed from endDate
+  
+  // New Fields
+  projectTitle        String?
+  projectDescription  String?
+  registrationLink    String?
+  submissionPortal    String?
+  discordSlack        String?
+
+  // Status
+  status              String          @default("upcoming") // Was HackathonStatus
+  
+  // Relations
+  tasks               Task[]
+  links       ProjectLink[]
+  notes       ProjectNote[]
+  noteLinks   NoteLink[]
+  
+  // Determine if it converted to a project
+  linkedProjectId     String?         @unique
+  linkedProject       Project?
+  
+  // Calendar Events
+  calendarEvents      CalendarEvent[]
+  
+  // Audit Trail
+  history             HackathonEvent[]
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+// Sub-Entities (Shared)
+model ProjectLink {
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  description String?
+  
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  hackathonId String?
+  hackathon   Hackathon? @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+}
+
+model ProjectNote {
+  id          String   @id @default(uuid())
+  content     String
+  
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  hackathonId String?
+  hackathon   Hackathon? @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+}
+
+// =============================================
+// AUDIT DOMAIN (Immutable History)
+// =============================================
+
+model TaskEvent {
+  id        String         @id @default(uuid())
+  taskId    String
+  task      Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  type      String         // Was AuditEventType
+  field     String?        // Valid for UPDATE
+  oldValue  String?
+  newValue  String?
+  
+  timestamp DateTime       @default(now())
+}
+
+model ProjectEvent {
+  id        String         @id @default(uuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  type      String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  
+  timestamp DateTime       @default(now())
+}
+
+model HackathonEvent {
+  id          String         @id @default(uuid())
+  hackathonId String
+  hackathon   Hackathon      @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  type        String
+  field       String?
+  oldValue    String?
+  newValue    String?
+  
+  timestamp   DateTime       @default(now())
+}
+
+// =============================================
+// CALENDAR DOMAIN (Deadline Intelligence Surface)
+// =============================================
+
+model CalendarEvent {
+  id            String    @id @default(uuid())
+  title         String
+  date          DateTime
+  
+  // Classification
+  type          String    // PROJECT | HACKATHON | ACADEMIC | PERSONAL | APPLICATION
+  priority      String    @default("NORMAL") // NORMAL | HIGH | CRITICAL
+  
+  // Auto-generation tracking
+  autoGenerated Boolean   @default(false)
+  sourceType    String?   // project | hackathon | application | null (manual)
+  eventKind     String?   // registration | submission | event_start | deadline | interview | offer_deadline | joining
+  
+  // Relations (Mutually Exclusive)
+  projectId     String?
+  project       Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  hackathonId   String?
+  hackathon     Hackathon? @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  // Metadata
+  description   String?
+  externalLink  String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([date])
+  @@index([type])
+  @@index([projectId])
+  @@index([hackathonId])
+  @@index([applicationId])
+}
+
+// =============================================
+// ATTENDANCE DOMAIN (Event-Based Accounting)
+// =============================================
+
+model Faculty {
+  id                     String          @id @default(uuid())
+  name                   String
+  title                  String          // Dr., Prof., Mr., Ms.
+  department             String
+  
+  // Relations
+  subjects               Subject[]
+  scheduledInstances     ClassInstance[] @relation("ScheduledFaculty")
+  actualInstances        ClassInstance[] @relation("ActualFaculty")
+  
+  createdAt              DateTime        @default(now())
+}
+
+model Subject {
+  id               String          @id @default(uuid())
+  name             String
+  code             String          @unique
+  type             String          // LECTURE | LAB
+  weight           Int             @default(1) // 1 for lecture, 2 for lab
+  
+  // Default faculty
+  defaultFacultyId String
+  defaultFaculty   Faculty         @relation(fields: [defaultFacultyId], references: [id])
+  
+  // Relations
+  timetableSlots       TimetableSlot[]
+  classInstances       ClassInstance[]
+  actualInstances      ClassInstance[] @relation("ActualSubject") // Instances where this subject was taught in another subject's slot
+  
+  createdAt        DateTime        @default(now())
+  
+  @@index([type])
+}
+
+model TimetableSlot {
+  id         String   @id @default(uuid())
+  subjectId  String
+  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  dayOfWeek  String   // monday, tuesday, wednesday, thursday, friday, saturday
+  startTime  String   // HH:MM format
+  endTime    String   // HH:MM format
+  room       String?
+  
+  createdAt  DateTime @default(now())
+  
+  @@unique([subjectId, dayOfWeek, startTime])
+  @@index([dayOfWeek])
+}
+
+model ClassInstance {
+  id                  String             @id @default(uuid())
+  
+  // Subject relation
+  subjectId           String
+  subject             Subject            @relation(fields: [subjectId], references: [id])
+  
+  // Time tracking
+  date                DateTime           // The specific date of this class
+  startTime           String             // HH:MM
+  endTime             String             // HH:MM
+  type                String             // LECTURE | LAB (copied from subject for denormalization)
+  
+  // Faculty tracking
+  scheduledFacultyId  String
+  scheduledFaculty    Faculty            @relation("ScheduledFaculty", fields: [scheduledFacultyId], references: [id])
+  
+  actualFacultyId     String?            // Set when faculty is exchanged
+  actualFaculty       Faculty?           @relation("ActualFaculty", fields: [actualFacultyId], references: [id])
+  
+  // Subject exchange tracking (when a different subject is taught in this slot)
+  actualSubjectId     String?            // Set when subject is exchanged (e.g., LT taught in IoT's slot)
+  actualSubject       Subject?           @relation("ActualSubject", fields: [actualSubjectId], references: [id])
+  
+  // Status (THE TRUTH)
+  status              String             @default("SCHEDULED") // SCHEDULED | ATTENDED | MISSED | CANCELLED | OTHER_ACTIVITY
+  notes               String?            // Optional notes for any status
+  
+  // Reschedule tracking (immutable history)
+  rescheduledFromId   String?            @unique
+  rescheduledFrom     ClassInstance?     @relation("Reschedule", fields: [rescheduledFromId], references: [id])
+  rescheduledTo       ClassInstance?     @relation("Reschedule")
+  
+  // Reason (required for MISSED)
+  attendanceReason    AttendanceReason?
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  
+  @@unique([subjectId, date, startTime])
+  @@index([date])
+  @@index([status])
+  @@index([subjectId])
+}
+
+model AttendanceReason {
+  id               String        @id @default(uuid())
+  
+  classInstanceId  String        @unique
+  classInstance    ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
+  
+  reasonType       String        // SICK | EVENT | HACKATHON | PERSONAL | UNKNOWN
+  description      String?       // Optional detailed description
+  
+  createdAt        DateTime      @default(now())
+}
+
+// =============================================
+// KNOWLEDGE DOMAIN (Independent Context)
+// =============================================
+
+model Note {
+  id        String     @id @default(uuid())
+  title     String?
+  content   String
+  
+  links     NoteLink[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model NoteLink {
+  id        String   @id @default(uuid())
+  
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  
+  // Targets
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  hackathonId String?
+  hackathon   Hackathon? @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([noteId])
+  @@index([projectId])
+  @@index([hackathonId])
+  @@index([applicationId])
+}
+
+// =============================================
+// APPLICATION TRACKER DOMAIN (Career Logbook)
+// =============================================
+
+model Application {
+  id              String             @id @default(uuid())
+  companyName     String
+  role            String
+  type            String             // INTERNSHIP | PLACEMENT
+  
+  // Links
+  companyLink     String?            // Careers page / JD
+  applicationLink String?            // Form / portal submitted
+  
+  // Dates & Status
+  appliedDate     DateTime?
+  status          String             @default("discovered") // 7 strict statuses
+  
+  // Relations
+  updates         ApplicationUpdate[]
+  noteLinks       NoteLink[]
+  calendarEvents  CalendarEvent[]
+  
+  createdAt       DateTime           @default(now())
+  lastUpdated     DateTime           @updatedAt
+  
+  @@index([status])
+  @@index([type])
+}
+
+model ApplicationUpdate {
+  id            String      @id @default(uuid())
+  
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  updateType    String      // STATUS_CHANGE | NOTE | LINK_ADDED
+  content       String
+  
+  timestamp     DateTime    @default(now())
+  
+  @@index([applicationId])
+}
+

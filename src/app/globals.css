@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* NEXUS Design System - Strict Color Tokens */
+:root {
+  /* App background */
+  --bg-app: #f8fafc; /* slate-50 */
+  
+  /* Card background */
+  --bg-card: #ffffff;
+  
+  /* Borders */
+  --border-default: #e2e8f0; /* slate-200 */
+  
+  /* Text colors */
+  --text-primary: #1e293b; /* slate-800 */
+  --text-secondary: #64748b; /* slate-500 */
+  --text-muted: #94a3b8; /* slate-400 */
+  
+  /* Button colors */
+  --btn-primary: #0f172a; /* slate-900 */
+  
+  /* Status colors */
+  --status-success: #16a34a; /* green-600 */
+  --status-warning: #d97706; /* amber-600 */
+  --status-error: #dc2626; /* red-600 */
+  --status-info: #2563eb; /* blue-600 */
+}
+
+/* Base styles */
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Remove dark mode - NEXUS is light-only */
+/* NO dark theme allowed per design constraints */
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
