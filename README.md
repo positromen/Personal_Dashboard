@@ -4,46 +4,46 @@ A comprehensive personal productivity dashboard built with Next.js 16, React 19,
 
 ## Features
 
-### 📊 Overview Dashboard
+### Overview Dashboard
 - Real-time situational awareness with key metrics
 - Smart deadline detection and prioritization
 - Quick access to urgent tasks and upcoming events
 
-### 📅 Calendar & Deadlines
+### Calendar & Deadlines
 - Integrated calendar with manual event creation
 - Project and hackathon deadline tracking
 - Academic and personal event management
 - Smart categorization by event type
 
-### 📚 Attendance Tracking
+### Attendance Tracking
 - Subject-wise attendance monitoring
 - Statistical insights and trends
 - Easy attendance logging and management
 
-### 📝 Project Management
+### Project Management
 - Track personal and academic projects
 - Status-based project organization
 - Linked notes and documentation
 - Progress monitoring and deadlines
 
-### 🏆 Hackathon Tracker
+### Hackathon Tracker
 - Comprehensive hackathon management
 - Registration status tracking
 - Team formation and contact management
 - Prize and achievement recording
 
-### ✅ Task Management
+### Task Management
 - Priority-based task organization
 - Status tracking and completion monitoring
 - Quick task creation and updates
 
-### 🎯 Job Applications
+### Job Applications
 - Application status tracking
 - Company and role management
 - Interview scheduling and follow-ups
 - Comprehensive application lifecycle
 
-### 📓 Notes System
+### Notes System
 - Rich text note-taking
 - Linking notes to projects and events
 - Search and organization features
