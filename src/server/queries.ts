@@ -73,9 +73,19 @@ export async function getHackathonsWithDerivedData() {
             else if (daysToSubmit < 7) risk = 'at_risk';
         }
 
+        // Parse rounds JSON
+        let rounds = [];
+        try {
+            rounds = h.rounds ? JSON.parse(h.rounds) : [];
+        } catch {
+            rounds = [];
+        }
+
         return {
             ...h,
-            risk
+            risk,
+            rounds,
+            currentRound: h.currentRound || 0
         };
     });
 }
@@ -132,7 +142,15 @@ export async function getHackathonById(id: string) {
         else if (daysToSubmit < 7) risk = 'at_risk';
     }
 
-    return { ...hackathon, risk };
+    // Parse rounds JSON
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+
+    return { ...hackathon, risk, rounds, currentRound: hackathon.currentRound || 0 };
 }
 
 export async function getAllProjects() {

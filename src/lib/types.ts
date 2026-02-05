@@ -295,7 +295,33 @@ export const DEFAULT_ATTENDANCE_CONFIG: AttendanceConfig = {
 // HACKATHON TYPES (Intelligence Layer)
 // =============================================
 export type HackathonMode = 'online' | 'offline' | 'hybrid';
-export type HackathonStatus = 'upcoming' | 'registered' | 'in_progress' | 'submitted' | 'completed' | 'missed';
+export type HackathonStatus = 
+    | 'discovered'
+    | 'applied' 
+    | 'under_review'
+    | 'shortlisted'
+    | 'team_formation'
+    | 'in_progress'
+    | 'submission'
+    | 'results_pending'
+    | 'selected'
+    | 'not_selected'
+    | 'withdrawn';
+
+export type RoundStatus = 'upcoming' | 'in_progress' | 'submitted' | 'cleared' | 'not_cleared' | 'skipped';
+
+export interface HackathonRound {
+    id: string;
+    roundNumber: number;
+    name: string;                    // e.g., "Round 1", "Semi-Finals", "Finals"
+    description?: string;
+    deadline: string;                // Submission deadline for this round
+    submissionLink?: string;         // Submission portal for this round
+    status: RoundStatus;
+    submittedAt?: string;           // When submission was made
+    result?: string;                // "Qualified", "Selected for Finals", etc.
+    feedback?: string;              // Judge feedback if any
+}
 
 export interface Hackathon {
     id: string;
@@ -317,6 +343,10 @@ export interface Hackathon {
 
     // Status
     status: HackathonStatus;
+
+    // Rounds Tracking
+    rounds: HackathonRound[];
+    currentRound: number;           // Index of current active round
 
     // External Links
     registrationLink?: string;

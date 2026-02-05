@@ -581,7 +581,6 @@ export function registerForHackathon(hackathonId: string): { projectId: string; 
         links: [],
         notes: [],
         linkedTasks: [],
-        linkedComponents: [],
         linkedHackathonId: hackathonId,
         lastActivity: today,
         createdAt: today,
@@ -660,7 +659,7 @@ export function registerForHackathon(hackathonId: string): { projectId: string; 
 
     // Update hackathon with linked project and status
     updateHackathon(hackathonId, {
-        status: 'registered',
+        status: 'applied',
         linkedProjectId: projectId,
     });
 
@@ -678,7 +677,7 @@ export function submitHackathon(hackathonId: string): void {
     if (!hackathon) return;
 
     // Update hackathon status
-    updateHackathon(hackathonId, { status: 'submitted' });
+    updateHackathon(hackathonId, { status: 'submission' });
 
     // Mark linked project as completed
     if (hackathon.linkedProjectId) {
@@ -701,7 +700,7 @@ export function markHackathonMissed(hackathonId: string): void {
     if (!hackathon) return;
 
     // Update hackathon status
-    updateHackathon(hackathonId, { status: 'missed' });
+    updateHackathon(hackathonId, { status: 'not_selected' });
 
     // Mark linked project as on-hold
     if (hackathon.linkedProjectId) {
@@ -872,7 +871,6 @@ export function initializeSampleData(): void {
             links: [],
             notes: [],
             linkedTasks: [],
-            linkedComponents: [],
             lastActivity: today,
             createdAt: '2026-01-05',
         },
@@ -889,7 +887,6 @@ export function initializeSampleData(): void {
             links: [],
             notes: [],
             linkedTasks: [],
-            linkedComponents: [],
             lastActivity: '2026-01-20',
             createdAt: '2026-01-15',
         },

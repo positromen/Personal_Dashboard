@@ -434,16 +434,17 @@ export default function ApplicationsClient({ applications }: ApplicationsClientP
                                             </StatusBadge>
 
                                             {(app.companyLink || app.applicationLink) && (
-                                                <a
-                                                    href={app.applicationLink || app.companyLink || '#'}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    onClick={e => e.stopPropagation()}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        window.open(app.applicationLink || app.companyLink || '#', '_blank', 'noopener,noreferrer');
+                                                    }}
                                                     className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
                                                     title="Open application link"
                                                 >
                                                     <ExternalLink className="h-4 w-4 text-slate-400 hover:text-indigo-600" />
-                                                </a>
+                                                </button>
                                             )}
 
                                             <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-indigo-400 transition-colors" />

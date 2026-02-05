@@ -48,6 +48,7 @@ model Project {
   id          String       @id @default(uuid())
   name        String
   description String?
+  domain      String       @default("personal") // college | personal | hackathon
   stage       String       @default("planning") // Was ProjectStage
   deadline    DateTime?
   
@@ -94,6 +95,10 @@ model Hackathon {
 
   // Status
   status              String          @default("upcoming") // Was HackathonStatus
+  
+  // Rounds system
+  rounds              String?         @default("[]") // Array of HackathonRound objects as JSON string
+  currentRound        Int?            @default(0)    // Index of current round
   
   // Relations
   tasks               Task[]

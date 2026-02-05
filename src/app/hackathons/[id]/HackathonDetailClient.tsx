@@ -3,12 +3,12 @@
 // NEXUS Hackathon Detail Workspace
 // Uses Server Actions for database operations
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { TaskCard } from '@/components/TaskCard';
 import LinkedNotesSection from '@/app/notes/LinkedNotesSection';
-import { Hackathon, HackathonMode, Task } from '@/lib/types';
+import { Hackathon, HackathonMode, HackathonStatus, RoundStatus, Task } from '@/lib/types';
 import { cn, formatDate, getToday } from '@/lib/utils';
 import {
     ChevronLeft,
@@ -24,7 +24,14 @@ import {
     MapPin,
     Laptop,
     Zap,
-    Link2
+    Link2,
+    TrendingUp,
+    Target,
+    CheckCircle2,
+    Clock,
+    AlertCircle,
+    XCircle,
+    Send
 } from 'lucide-react';
 import {
     updateHackathon,
@@ -32,7 +39,13 @@ import {
     addNote,
     linkProjectToHackathon,
     unlinkProjectFromHackathon,
-    createProject
+    createProject,
+    updateHackathonStatus,
+    addHackathonRound,
+    updateHackathonRound,
+    submitHackathonRound,
+    updateRoundResult,
+    deleteHackathonRound
 } from '@/server/container/actions';
 import { createTask } from '@/server/execution/actions';
 
@@ -57,6 +70,7 @@ interface HackathonDetailProps {
 
 export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], allNotes = [] }: HackathonDetailProps) {
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
 
     // =============================================
     // STATE
@@ -64,6 +78,14 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
     const [formData, setFormData] = useState<Hackathon>(hackathon);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Status editing state
+    const [showStatusModal, setShowStatusModal] = useState(false);
+
+    // Rounds management state
+    const [showAddRoundModal, setShowAddRoundModal] = useState(false);
+    const [showRoundActionModal, setShowRoundActionModal] = useState<string | null>(null);
+    const [newRound, setNewRound] = useState({ name: '', deadline: '', description: '', submissionLink: '' });
 
     // Staging for NEW items
     const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
@@ -169,6 +191,80 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
         setFormData(prev => ({ ...prev, ...updates }));
     };
 
+    // STATUS HANDLING
+    const handleStatusChange = (newStatus: HackathonStatus) => {
+        startTransition(async () => {
+            await updateHackathonStatus(hackathon.id, newStatus);
+            setShowStatusModal(false);
+        });
+    };
+
+    // ROUNDS HANDLING
+    const handleAddRound = () => {
+        if (!newRound.name || !newRound.deadline) return;
+        startTransition(async () => {
+            await addHackathonRound(hackathon.id, {
+                name: newRound.name,
+                deadline: newRound.deadline,
+                description: newRound.description,
+                submissionLink: newRound.submissionLink
+            });
+            setNewRound({ name: '', deadline: '', description: '', submissionLink: '' });
+            setShowAddRoundModal(false);
+        });
+    };
+
+    const handleSubmitRound = (roundId: string) => {
+        startTransition(async () => {
+            await submitHackathonRound(hackathon.id, roundId);
+            setShowRoundActionModal(null);
+        });
+    };
+
+    const handleRoundResult = (roundId: string, result: 'cleared' | 'not_cleared', feedback?: string) => {
+        startTransition(async () => {
+            await updateRoundResult(hackathon.id, roundId, result, feedback);
+            setShowRoundActionModal(null);
+        });
+    };
+
+    const handleDeleteRound = (roundId: string) => {
+        if (!confirm('Delete this round?')) return;
+        startTransition(async () => {
+            await deleteHackathonRound(hackathon.id, roundId);
+        });
+    };
+
+    const getRoundStatusIcon = (status: RoundStatus) => {
+        switch (status) {
+            case 'upcoming': return <Clock className="h-4 w-4 text-slate-500" />;
+            case 'in_progress': return <AlertCircle className="h-4 w-4 text-amber-500" />;
+            case 'submitted': return <Send className="h-4 w-4 text-blue-500" />;
+            case 'cleared': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+            case 'not_cleared': return <XCircle className="h-4 w-4 text-red-500" />;
+            case 'skipped': return <X className="h-4 w-4 text-slate-400" />;
+            default: return <Clock className="h-4 w-4 text-slate-500" />;
+        }
+    };
+
+    const getRoundStatusColor = (status: RoundStatus) => {
+        switch (status) {
+            case 'upcoming': return 'bg-slate-100 text-slate-600';
+            case 'in_progress': return 'bg-amber-100 text-amber-700';
+            case 'submitted': return 'bg-blue-100 text-blue-700';
+            case 'cleared': return 'bg-green-100 text-green-700';
+            case 'not_cleared': return 'bg-red-100 text-red-700';
+            case 'skipped': return 'bg-slate-100 text-slate-500';
+            default: return 'bg-slate-100 text-slate-600';
+        }
+    };
+
+    const getDaysToDeadline = (deadline: string) => {
+        if (!deadline) return null;
+        const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 3600 * 24));
+        return days;
+    };
+
     // LINKS
     const removeLink = (linkId: string) => {
         mutate({ links: (formData.links || []).filter(l => l.id !== linkId) });
@@ -238,6 +334,7 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
             const newProject = await createProject({
                 name: formData.projectTitle || formData.name,
                 description: formData.projectDescription || `Project for ${formData.name}`,
+                domain: 'hackathon',
                 deadline: formData.submissionDeadline
             });
 
@@ -387,14 +484,33 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
                                 <h1 className="text-2xl font-bold text-slate-900">{formData.name}</h1>
                                 <p className="text-slate-500 font-medium">by {formData.organizer || 'Unknown Organizer'}</p>
                             </div>
-                            <div className={cn(
-                                "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
-                                formData.status === 'registered' ? "bg-blue-100 text-blue-700" :
+                            <div className="flex items-center gap-2">
+                                <div className={cn(
+                                    "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
+                                    formData.status === 'discovered' ? "bg-slate-100 text-slate-600" :
+                                    formData.status === 'applied' ? "bg-blue-100 text-blue-700" :
+                                    formData.status === 'under_review' ? "bg-yellow-100 text-yellow-700" :
+                                    formData.status === 'shortlisted' ? "bg-purple-100 text-purple-700" :
+                                    formData.status === 'team_formation' ? "bg-cyan-100 text-cyan-700" :
                                     formData.status === 'in_progress' ? "bg-amber-100 text-amber-700" :
-                                        formData.status === 'submitted' ? "bg-green-100 text-green-700" :
-                                            "bg-slate-100 text-slate-600"
-                            )}>
-                                {formData.status?.replace('_', ' ') || 'upcoming'}
+                                    formData.status === 'submission' ? "bg-indigo-100 text-indigo-700" :
+                                    formData.status === 'results_pending' ? "bg-orange-100 text-orange-700" :
+                                    formData.status === 'selected' ? "bg-green-100 text-green-700" :
+                                    formData.status === 'not_selected' ? "bg-red-100 text-red-700" :
+                                    formData.status === 'withdrawn' ? "bg-gray-100 text-gray-700" :
+                                    "bg-slate-100 text-slate-600"
+                                )}>
+                                    {formData.status?.replace('_', ' ') || 'discovered'}
+                                </div>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setShowStatusModal(true)}
+                                    className="text-slate-500 hover:text-slate-700 p-1"
+                                    title="Update Status"
+                                >
+                                    <TrendingUp className="h-4 w-4" />
+                                </Button>
                             </div>
                         </div>
 
@@ -420,6 +536,152 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
                     </div>
                 )}
             </div>
+
+            {/* ROUNDS TRACKING */}
+            <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Target className="h-4 w-4" /> Rounds & Timeline
+                    </h3>
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setShowAddRoundModal(true)}
+                        className="text-xs"
+                    >
+                        <Plus className="h-3 w-3 mr-1" /> Add Round
+                    </Button>
+                </div>
+
+                {(!formData.rounds || formData.rounds.length === 0) ? (
+                    <div className="p-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-center">
+                        <Target className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-slate-500 text-sm">No rounds added yet</p>
+                        <p className="text-slate-400 text-xs mt-1">Add rounds to track your hackathon progress</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {formData.rounds.map((round, index) => {
+                            const daysLeft = getDaysToDeadline(round.deadline);
+                            const isCurrentRound = index === formData.currentRound;
+                            return (
+                                <div 
+                                    key={round.id}
+                                    className={cn(
+                                        "p-4 bg-white rounded-lg border transition-all",
+                                        isCurrentRound ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-200",
+                                        round.status === 'cleared' && "bg-green-50/50",
+                                        round.status === 'not_cleared' && "bg-red-50/50 opacity-75"
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className={cn(
+                                                "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
+                                                round.status === 'cleared' ? "bg-green-100 text-green-700" :
+                                                round.status === 'not_cleared' ? "bg-red-100 text-red-700" :
+                                                round.status === 'submitted' ? "bg-blue-100 text-blue-700" :
+                                                isCurrentRound ? "bg-blue-500 text-white" :
+                                                "bg-slate-100 text-slate-600"
+                                            )}>
+                                                {round.roundNumber}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-semibold text-slate-900">{round.name}</h4>
+                                                    <span className={cn(
+                                                        "px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1",
+                                                        getRoundStatusColor(round.status as RoundStatus)
+                                                    )}>
+                                                        {getRoundStatusIcon(round.status as RoundStatus)}
+                                                        {round.status?.replace('_', ' ')}
+                                                    </span>
+                                                    {isCurrentRound && round.status !== 'cleared' && round.status !== 'not_cleared' && (
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500 text-white">
+                                                            Current
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {round.description && (
+                                                    <p className="text-sm text-slate-500 mt-1">{round.description}</p>
+                                                )}
+                                                <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500">
+                                                    <span className="flex items-center gap-1">
+                                                        <CalendarIcon className="h-3 w-3" />
+                                                        Deadline: {formatDate(round.deadline)}
+                                                    </span>
+                                                    {daysLeft !== null && round.status !== 'cleared' && round.status !== 'not_cleared' && round.status !== 'submitted' && (
+                                                        <span className={cn(
+                                                            "px-2 py-0.5 rounded",
+                                                            daysLeft < 0 ? "bg-red-100 text-red-700" :
+                                                            daysLeft <= 2 ? "bg-amber-100 text-amber-700" :
+                                                            "bg-slate-100 text-slate-600"
+                                                        )}>
+                                                            {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` :
+                                                             daysLeft === 0 ? 'Due today' :
+                                                             `${daysLeft} days left`}
+                                                        </span>
+                                                    )}
+                                                    {round.submittedAt && (
+                                                        <span className="flex items-center gap-1 text-blue-600">
+                                                            <Send className="h-3 w-3" />
+                                                            Submitted: {formatDate(round.submittedAt)}
+                                                        </span>
+                                                    )}
+                                                    {round.result && (
+                                                        <span className={cn(
+                                                            "font-medium",
+                                                            round.status === 'cleared' ? "text-green-600" : "text-red-600"
+                                                        )}>
+                                                            Result: {round.result}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {round.feedback && (
+                                                    <p className="text-xs text-slate-500 mt-2 italic bg-slate-50 p-2 rounded">
+                                                        Feedback: {round.feedback}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {round.submissionLink && (
+                                                <a 
+                                                    href={round.submissionLink} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                                    title="Open Submission Portal"
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </a>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setShowRoundActionModal(round.id)}
+                                                className="text-slate-400 hover:text-slate-600 p-2"
+                                                title="Round Actions"
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDeleteRound(round.id)}
+                                                className="text-slate-400 hover:text-red-600 p-2"
+                                                title="Delete Round"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
 
             {/* LINKED PROJECT */}
             <section className="space-y-3">
@@ -631,6 +893,222 @@ export function HackathonDetailClient({ hackathon, projects, linkedNotes = [], a
                     </div>
                 )}
             </section>
+
+            {/* STATUS UPDATE MODAL */}
+            {showStatusModal && (
+                <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-4">Update Hackathon Status</h3>
+                        <div className="space-y-2 max-h-72 overflow-y-auto">
+                            {(['discovered', 'applied', 'under_review', 'shortlisted', 'team_formation', 'in_progress', 'submission', 'results_pending', 'selected', 'not_selected', 'withdrawn'] as const).map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => handleStatusChange(status)}
+                                    disabled={isPending}
+                                    className={cn(
+                                        "w-full text-left px-4 py-3 rounded-lg border transition-all",
+                                        formData.status === status
+                                            ? "bg-blue-50 border-blue-200 text-blue-900"
+                                            : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700",
+                                        isPending && "opacity-50 cursor-not-allowed"
+                                    )}
+                                >
+                                    <div className="font-medium capitalize">
+                                        {status.replace('_', ' ')}
+                                    </div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                        {status === 'discovered' && 'Found this hackathon'}
+                                        {status === 'applied' && 'Application submitted'}
+                                        {status === 'under_review' && 'Application being reviewed'}
+                                        {status === 'shortlisted' && 'Made it to the next round'}
+                                        {status === 'team_formation' && 'Looking for or forming team'}
+                                        {status === 'in_progress' && 'Currently participating'}
+                                        {status === 'submission' && 'Project submitted, awaiting results'}
+                                        {status === 'results_pending' && 'Results being announced'}
+                                        {status === 'selected' && 'Won or placed in hackathon'}
+                                        {status === 'not_selected' && 'Did not win this time'}
+                                        {status === 'withdrawn' && 'Withdrew from hackathon'}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => setShowStatusModal(false)}
+                                disabled={isPending}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ADD ROUND MODAL */}
+            {showAddRoundModal && (
+                <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-4">Add New Round</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Round Name *</label>
+                                <input
+                                    type="text"
+                                    value={newRound.name}
+                                    onChange={(e) => setNewRound(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="e.g., Round 1, Semi-Finals, Finals"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Deadline *</label>
+                                <input
+                                    type="date"
+                                    value={newRound.deadline}
+                                    onChange={(e) => setNewRound(prev => ({ ...prev, deadline: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    value={newRound.description}
+                                    onChange={(e) => setNewRound(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Brief description of this round"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Submission Link</label>
+                                <input
+                                    type="url"
+                                    value={newRound.submissionLink}
+                                    onChange={(e) => setNewRound(prev => ({ ...prev, submissionLink: e.target.value }))}
+                                    placeholder="https://..."
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => {
+                                    setShowAddRoundModal(false);
+                                    setNewRound({ name: '', deadline: '', description: '', submissionLink: '' });
+                                }}
+                                disabled={isPending}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                onClick={handleAddRound}
+                                disabled={isPending || !newRound.name || !newRound.deadline}
+                            >
+                                Add Round
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ROUND ACTION MODAL */}
+            {showRoundActionModal && (
+                <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+                        {(() => {
+                            const round = formData.rounds?.find(r => r.id === showRoundActionModal);
+                            if (!round) return null;
+                            return (
+                                <>
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-4">
+                                        {round.name} - Actions
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {round.status === 'upcoming' && (
+                                            <button
+                                                onClick={() => {
+                                                    startTransition(async () => {
+                                                        await updateHackathonRound(hackathon.id, round.id, { status: 'in_progress' });
+                                                        setShowRoundActionModal(null);
+                                                    });
+                                                }}
+                                                disabled={isPending}
+                                                className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:bg-amber-50 hover:border-amber-200 transition-all"
+                                            >
+                                                <div className="flex items-center gap-2 font-medium text-amber-700">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    Start Round
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Mark this round as in progress</p>
+                                            </button>
+                                        )}
+                                        
+                                        {(round.status === 'upcoming' || round.status === 'in_progress') && (
+                                            <button
+                                                onClick={() => handleSubmitRound(round.id)}
+                                                disabled={isPending}
+                                                className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all"
+                                            >
+                                                <div className="flex items-center gap-2 font-medium text-blue-700">
+                                                    <Send className="h-4 w-4" />
+                                                    Mark as Submitted
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Mark this round&apos;s submission as complete</p>
+                                            </button>
+                                        )}
+                                        
+                                        {round.status === 'submitted' && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleRoundResult(round.id, 'cleared')}
+                                                    disabled={isPending}
+                                                    className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:bg-green-50 hover:border-green-200 transition-all"
+                                                >
+                                                    <div className="flex items-center gap-2 font-medium text-green-700">
+                                                        <CheckCircle2 className="h-4 w-4" />
+                                                        Cleared / Qualified
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-1">Passed this round and moving to next</p>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRoundResult(round.id, 'not_cleared')}
+                                                    disabled={isPending}
+                                                    className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 transition-all"
+                                                >
+                                                    <div className="flex items-center gap-2 font-medium text-red-700">
+                                                        <XCircle className="h-4 w-4" />
+                                                        Not Cleared
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-1">Did not qualify for next round</p>
+                                                </button>
+                                            </>
+                                        )}
+                                        
+                                        {(round.status === 'cleared' || round.status === 'not_cleared') && (
+                                            <div className="p-4 bg-slate-50 rounded-lg text-center">
+                                                <p className="text-slate-600 text-sm">
+                                                    This round is complete with result: <strong>{round.result}</strong>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex justify-end gap-2 mt-6">
+                                        <Button 
+                                            variant="ghost" 
+                                            onClick={() => setShowRoundActionModal(null)}
+                                            disabled={isPending}
+                                        >
+                                            Close
+                                        </Button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

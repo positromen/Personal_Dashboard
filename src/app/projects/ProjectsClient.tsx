@@ -49,6 +49,7 @@ export function ProjectsClient({ initialProjects }: ProjectsClientProps) {
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
+    const [newProjectDomain, setNewProjectDomain] = useState<ProjectDomain>('personal');
     const [isPending, setIsPending] = useState(false);
 
     const filteredProjects = filter === 'all'
@@ -62,37 +63,14 @@ export function ProjectsClient({ initialProjects }: ProjectsClientProps) {
         try {
             await createProject({
                 name: newProjectName,
-                description: 'No description added', // Default
-                // Domain isn't in CreateProjectSchema? I should check schema.
-                // Assuming schema is name, description, priority... 
-                // Schema likely defaults domain? or I need to update schema.
-                // Wait, Project model has 'domain' field? 
-                // Prisma Schema: Project { name, description, stage, ... }
-                // NO DOMAIN FIELD IN PRISMA SCHEMA?
-                // I checked schema in Step 631.
-                // model Project { ... name, description, stage ... }
-                // NO DOMAIN field.
-                // But Types.ts has domain.
-                // I probably forgot to add Domain to Schema!
-                // Or I intended to infer it?
-                // Step 631 Prisma Schema:
-                // model Project { id, name, description, stage... originHackathonId ... }
-                // No 'domain' field.
-                // This is a discrepancy.
-                // If I want to persist 'domain', I MUST add it to Schema.
-                // User wants "smooth".
-                // I will add 'domain' (String) to Project Schema.
+                description: 'No description added',
+                domain: newProjectDomain,
             });
 
-            // For now, I'll allow creation without domain (Schema validates name).
-            // But this means Domain info is lost.
-            // I should FIX THE SCHEMA quickly.
-            // Or maybe 'originHackathonId' implies domain?
-            // "Personal" / "College" distinction needs a field.
-
             setNewProjectName('');
+            setNewProjectDomain('personal');
             setIsAddOpen(false);
-            router.refresh(); // Refresh to see new project (with default domain?)
+            router.refresh();
         } catch (e) {
             console.error(e);
         } finally {
@@ -140,6 +118,15 @@ export function ProjectsClient({ initialProjects }: ProjectsClientProps) {
                 <div className="relative">
                     {isAddOpen ? (
                         <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+                            <select
+                                value={newProjectDomain}
+                                onChange={e => setNewProjectDomain(e.target.value as ProjectDomain)}
+                                className="px-3 py-1.5 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                            >
+                                <option value="college">College</option>
+                                <option value="personal">Personal</option>
+                                <option value="hackathon">Hackathon</option>
+                            </select>
                             <input
                                 autoFocus
                                 placeholder="Project Name..."
@@ -148,11 +135,10 @@ export function ProjectsClient({ initialProjects }: ProjectsClientProps) {
                                 onChange={e => setNewProjectName(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleCreate()}
                             />
-                            {/* Domain Selection hidden if Schema doesn't support it yet */}
                             <Button size="sm" onClick={handleCreate} disabled={isPending}>{isPending ? '...' : 'Create'}</Button>
                             <button onClick={() => setIsAddOpen(false)} className="text-slate-400 hover:text-slate-600">
                                 <span className="sr-only">Cancel</span>
-                                &times;;
+                                &times;
                             </button>
                         </div>
                     ) : (
@@ -167,7 +153,7 @@ export function ProjectsClient({ initialProjects }: ProjectsClientProps) {
             {/* Projects Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProjects.map(project => {
-                    // Default domain if missing
+                    // Get domain with fallback
                     const pDomain = project.domain || 'personal';
                     const domain = DOMAIN_CONFIG[pDomain];
                     const stage = STAGE_CONFIG[project.stage || 'planning'];

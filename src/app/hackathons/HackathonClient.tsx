@@ -32,7 +32,7 @@ import {
     markHackathonMissed,
     deleteHackathon
 } from '@/server/container/actions';
-import { Hackathon, HackathonStatus, HackathonMode } from '@/lib/types';
+import { Hackathon, HackathonMode } from '@/lib/types';
 import { cn, formatDate } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -61,7 +61,6 @@ interface CreateHackathonModal {
 export function HackathonClient({ initialHackathons }: HackathonClientProps) {
     const router = useRouter();
     const [hackathons, setHackathons] = useState<Hackathon[]>(initialHackathons);
-    const [statusFilter, setStatusFilter] = useState<HackathonStatus | 'all'>('all');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -87,20 +86,20 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
         discordSlack: '',
     });
 
-    // Filter hackathons by status
-    const filteredHackathons = statusFilter === 'all'
-        ? hackathons
-        : hackathons.filter(h => h.status === statusFilter);
-
     // Sort by submission deadline
-    const sortedHackathons = [...filteredHackathons].sort((a, b) => {
+    const sortedHackathons = [...hackathons].sort((a, b) => {
         const statusOrder: Record<string, number> = {
             'in_progress': 0,
-            'registered': 1,
-            'upcoming': 2,
-            'submitted': 3,
-            'completed': 4,
-            'missed': 5,
+            'team_formation': 1,
+            'shortlisted': 2,
+            'under_review': 3,
+            'applied': 4,
+            'discovered': 5,
+            'submission': 6,
+            'results_pending': 7,
+            'selected': 8,
+            'not_selected': 9,
+            'withdrawn': 10,
         };
         const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
         if (statusDiff !== 0) return statusDiff;
@@ -119,12 +118,17 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'upcoming': return { bg: 'bg-slate-100', text: 'text-slate-600' };
-            case 'registered': return { bg: 'bg-blue-100', text: 'text-blue-600' };
+            case 'discovered': return { bg: 'bg-slate-100', text: 'text-slate-600' };
+            case 'applied': return { bg: 'bg-blue-100', text: 'text-blue-600' };
+            case 'under_review': return { bg: 'bg-yellow-100', text: 'text-yellow-600' };
+            case 'shortlisted': return { bg: 'bg-purple-100', text: 'text-purple-600' };
+            case 'team_formation': return { bg: 'bg-cyan-100', text: 'text-cyan-600' };
             case 'in_progress': return { bg: 'bg-green-100', text: 'text-green-600' };
-            case 'submitted': return { bg: 'bg-purple-100', text: 'text-purple-600' };
-            case 'completed': return { bg: 'bg-emerald-100', text: 'text-emerald-600' };
-            case 'missed': return { bg: 'bg-red-100', text: 'text-red-600' };
+            case 'submission': return { bg: 'bg-indigo-100', text: 'text-indigo-600' };
+            case 'results_pending': return { bg: 'bg-orange-100', text: 'text-orange-600' };
+            case 'selected': return { bg: 'bg-emerald-100', text: 'text-emerald-600' };
+            case 'not_selected': return { bg: 'bg-red-100', text: 'text-red-600' };
+            case 'withdrawn': return { bg: 'bg-gray-100', text: 'text-gray-600' };
             default: return { bg: 'bg-slate-100', text: 'text-slate-600' };
         }
     };
@@ -247,20 +251,9 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
     // Stats
     const stats = {
         total: hackathons.length,
-        registered: hackathons.filter(h => h.status === 'registered').length,
-        inProgress: hackathons.filter(h => h.status === 'in_progress').length,
-        submitted: hackathons.filter(h => h.status === 'submitted' || h.status === 'completed').length,
-    };
-
-    // Status counts for filter tabs
-    const statusCounts: Record<HackathonStatus | 'all', number> = {
-        all: hackathons.length,
-        upcoming: hackathons.filter(h => h.status === 'upcoming').length,
-        registered: hackathons.filter(h => h.status === 'registered').length,
-        in_progress: hackathons.filter(h => h.status === 'in_progress').length,
-        submitted: hackathons.filter(h => h.status === 'submitted').length,
-        completed: hackathons.filter(h => h.status === 'completed').length,
-        missed: hackathons.filter(h => h.status === 'missed').length,
+        applied: hackathons.filter(h => ['applied', 'under_review', 'shortlisted'].includes(h.status)).length,
+        inProgress: hackathons.filter(h => ['team_formation', 'in_progress', 'submission'].includes(h.status)).length,
+        completed: hackathons.filter(h => ['selected', 'not_selected'].includes(h.status)).length,
     };
 
     return (
@@ -281,8 +274,8 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                     <CardContent className="flex items-center gap-4">
                         <IconBox icon={CheckCircle2} size="lg" className="bg-blue-100" iconClassName="text-blue-600" />
                         <div>
-                            <p className="text-sm text-slate-500">Registered</p>
-                            <p className="text-3xl font-bold text-blue-600">{stats.registered}</p>
+                            <p className="text-sm text-slate-500">Applied</p>
+                            <p className="text-3xl font-bold text-blue-600">{stats.applied}</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -301,33 +294,15 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                     <CardContent className="flex items-center gap-4">
                         <IconBox icon={Send} size="lg" className="bg-purple-100" iconClassName="text-purple-600" />
                         <div>
-                            <p className="text-sm text-slate-500">Submitted</p>
-                            <p className="text-3xl font-bold text-purple-600">{stats.submitted}</p>
+                            <p className="text-sm text-slate-500">Completed</p>
+                            <p className="text-3xl font-bold text-purple-600">{stats.completed}</p>
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Filter Tabs & Add Button */}
-            <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex bg-slate-100 rounded-lg p-1 gap-1 flex-wrap">
-                    {(['all', 'upcoming', 'registered', 'in_progress', 'submitted', 'completed', 'missed'] as const).map(status => (
-                        <button
-                            key={status}
-                            onClick={() => setStatusFilter(status)}
-                            className={cn(
-                                "px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
-                                statusFilter === status
-                                    ? 'bg-white shadow text-slate-800'
-                                    : 'text-slate-600 hover:bg-slate-50'
-                            )}
-                        >
-                            {status === 'all' ? 'All' :
-                                status === 'in_progress' ? 'In Progress' :
-                                    status.charAt(0).toUpperCase() + status.slice(1)} ({statusCounts[status]})
-                        </button>
-                    ))}
-                </div>
+            {/* Add Button */}
+            <div className="flex justify-end">
                 <Button onClick={openCreateModal}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add Hackathon
@@ -361,7 +336,7 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                                 className={cn(
                                     "h-full transition-all duration-200 hover:shadow-md border-slate-200 group-hover:border-blue-300",
                                     hackathon.status === 'in_progress' && riskState === 'critical' && 'border-red-300 bg-red-50/30',
-                                    hackathon.status === 'missed' && 'border-red-300 bg-red-50/30 opacity-75'
+                                    hackathon.status === 'not_selected' && 'border-red-300 bg-red-50/30 opacity-75'
                                 )}
                             >
                                 <CardHeader>
@@ -423,7 +398,7 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                                         </span>
                                     </div>
 
-                                    {(hackathon.status === 'registered' || hackathon.status === 'in_progress') && (
+                                    {(hackathon.status === 'applied' || hackathon.status === 'in_progress') && (
                                         <div className={cn(
                                             "flex items-center gap-2 mb-4 p-2 rounded",
                                             getRiskColor(riskState)
@@ -483,7 +458,7 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                                     )}
 
                                     <div className="flex items-center gap-2 pt-4 border-t border-slate-100 flex-wrap">
-                                        {hackathon.status === 'upcoming' && (
+                                        {hackathon.status === 'discovered' && (
                                             <>
                                                 <Button
                                                     variant="success"
@@ -503,7 +478,7 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                                                 </Button>
                                             </>
                                         )}
-                                        {hackathon.status === 'registered' && (
+                                        {hackathon.status === 'applied' && (
                                             <>
                                                 <Button
                                                     variant="success"
@@ -543,7 +518,7 @@ export function HackathonClient({ initialHackathons }: HackathonClientProps) {
                                                 </Button>
                                             </>
                                         )}
-                                        {hackathon.status === 'submitted' && (
+                                        {hackathon.status === 'submission' && (
                                             <Button
                                                 variant="success"
                                                 size="sm"

@@ -48,6 +48,7 @@ export const UpdateTaskSchema = z.object({
 export const CreateProjectSchema = z.object({
     name: z.string().min(1),
     description: z.string().optional(),
+    domain: z.enum(['college', 'personal', 'hackathon']).default('personal'),
     deadline: z.string().optional(),
 });
 

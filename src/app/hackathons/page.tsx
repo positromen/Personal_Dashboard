@@ -50,7 +50,10 @@ export default async function HackathonsPage() {
         createdAt: h.createdAt.toISOString(),
         updatedAt: h.updatedAt.toISOString(),
         // Pass derived risk from Server Query
-        risk: (h as typeof h & { risk?: string }).risk
+        risk: (h as typeof h & { risk?: string }).risk,
+        // Rounds tracking
+        rounds: (h as typeof h & { rounds?: unknown[] }).rounds || [],
+        currentRound: (h as typeof h & { currentRound?: number }).currentRound || 0
     }));
 
     return (

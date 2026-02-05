@@ -17,6 +17,7 @@ export async function createProject(input: z.infer<typeof CreateProjectSchema>) 
         data: {
             name: data.name,
             description: data.description,
+            domain: data.domain,
             deadline: data.deadline ? new Date(data.deadline) : null,
             history: {
                 create: { type: 'CREATE', newValue: JSON.stringify(data) }
@@ -200,6 +201,8 @@ export async function updateHackathonStatus(id: string, status: string) {
         data: { status }
     });
     revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${id}`);
 }
 
 export async function submitHackathon(id: string) {
@@ -216,6 +219,211 @@ export async function markHackathonMissed(id: string) {
         data: { status: 'missed' }
     });
     revalidatePath('/');
+}
+
+// =============================================
+// HACKATHON ROUNDS MANAGEMENT
+// =============================================
+
+export async function addHackathonRound(hackathonId: string, round: {
+    name: string;
+    deadline: string;
+    description?: string;
+    submissionLink?: string;
+}) {
+    const hackathon = await prisma.hackathon.findUnique({
+        where: { id: hackathonId },
+        select: { rounds: true }
+    });
+    
+    if (!hackathon) throw new Error("Hackathon not found");
+    
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+    
+    const newRound = {
+        id: `round-${Date.now()}`,
+        roundNumber: rounds.length + 1,
+        name: round.name,
+        deadline: round.deadline,
+        description: round.description || '',
+        submissionLink: round.submissionLink || '',
+        status: 'upcoming',
+        submittedAt: null,
+        result: null,
+        feedback: null
+    };
+    
+    rounds.push(newRound);
+    
+    await prisma.hackathon.update({
+        where: { id: hackathonId },
+        data: { rounds: JSON.stringify(rounds) }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${hackathonId}`);
+    return newRound;
+}
+
+export async function updateHackathonRound(hackathonId: string, roundId: string, updates: {
+    name?: string;
+    deadline?: string;
+    description?: string;
+    submissionLink?: string;
+    status?: string;
+    submittedAt?: string;
+    result?: string;
+    feedback?: string;
+}) {
+    const hackathon = await prisma.hackathon.findUnique({
+        where: { id: hackathonId },
+        select: { rounds: true, currentRound: true }
+    });
+    
+    if (!hackathon) throw new Error("Hackathon not found");
+    
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+    
+    const roundIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
+    if (roundIndex === -1) throw new Error("Round not found");
+    
+    rounds[roundIndex] = {
+        ...rounds[roundIndex],
+        ...updates
+    };
+    
+    await prisma.hackathon.update({
+        where: { id: hackathonId },
+        data: { rounds: JSON.stringify(rounds) }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${hackathonId}`);
+}
+
+export async function submitHackathonRound(hackathonId: string, roundId: string) {
+    const hackathon = await prisma.hackathon.findUnique({
+        where: { id: hackathonId },
+        select: { rounds: true, currentRound: true }
+    });
+    
+    if (!hackathon) throw new Error("Hackathon not found");
+    
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+    
+    const roundIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
+    if (roundIndex === -1) throw new Error("Round not found");
+    
+    rounds[roundIndex] = {
+        ...rounds[roundIndex],
+        status: 'submitted',
+        submittedAt: new Date().toISOString()
+    };
+    
+    await prisma.hackathon.update({
+        where: { id: hackathonId },
+        data: { 
+            rounds: JSON.stringify(rounds),
+            currentRound: roundIndex
+        }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${hackathonId}`);
+}
+
+export async function updateRoundResult(hackathonId: string, roundId: string, result: 'cleared' | 'not_cleared', feedback?: string) {
+    const hackathon = await prisma.hackathon.findUnique({
+        where: { id: hackathonId },
+        select: { rounds: true, currentRound: true }
+    });
+    
+    if (!hackathon) throw new Error("Hackathon not found");
+    
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+    
+    const roundIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
+    if (roundIndex === -1) throw new Error("Round not found");
+    
+    rounds[roundIndex] = {
+        ...rounds[roundIndex],
+        status: result,
+        result: result === 'cleared' ? 'Qualified' : 'Not Qualified',
+        feedback: feedback || null
+    };
+    
+    // If cleared, set next round as current
+    const newCurrentRound = result === 'cleared' && roundIndex < rounds.length - 1 
+        ? roundIndex + 1 
+        : roundIndex;
+    
+    await prisma.hackathon.update({
+        where: { id: hackathonId },
+        data: { 
+            rounds: JSON.stringify(rounds),
+            currentRound: newCurrentRound
+        }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${hackathonId}`);
+}
+
+export async function deleteHackathonRound(hackathonId: string, roundId: string) {
+    const hackathon = await prisma.hackathon.findUnique({
+        where: { id: hackathonId },
+        select: { rounds: true }
+    });
+    
+    if (!hackathon) throw new Error("Hackathon not found");
+    
+    let rounds = [];
+    try {
+        rounds = hackathon.rounds ? JSON.parse(hackathon.rounds) : [];
+    } catch {
+        rounds = [];
+    }
+    
+    rounds = rounds.filter((r: { id: string }) => r.id !== roundId);
+    
+    // Renumber remaining rounds
+    rounds = rounds.map((r: { id: string }, index: number) => ({
+        ...r,
+        roundNumber: index + 1
+    }));
+    
+    await prisma.hackathon.update({
+        where: { id: hackathonId },
+        data: { rounds: JSON.stringify(rounds) }
+    });
+    
+    revalidatePath('/');
+    revalidatePath('/hackathons');
+    revalidatePath(`/hackathons/${hackathonId}`);
 }
 
 
