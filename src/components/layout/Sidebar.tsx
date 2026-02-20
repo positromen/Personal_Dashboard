@@ -37,9 +37,12 @@ export function Sidebar() {
     return (
         <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-white border-r border-slate-200">
             {/* Brand */}
-            <div className="flex h-16 items-center px-6 border-b border-slate-200">
+            <div className="flex h-16 items-center px-6 border-b border-slate-200 flex-col justify-center">
                 <span className="text-xl font-bold tracking-tight text-slate-800">
                     NEXUS
+                </span>
+                <span className="text-xs text-slate-500 italic -mt-1">
+                    Sab Moh Maya Hai
                 </span>
             </div>
 

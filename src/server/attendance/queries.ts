@@ -223,17 +223,25 @@ export async function getSubjectAttendanceStats(): Promise<SubjectAttendanceStat
         });
 
         const totalScheduled = subjectInstances.length;
-        const attended = subjectInstances.filter(i => i.status === 'ATTENDED' || i.status === 'OTHER_ACTIVITY').length;
-        const missed = subjectInstances.filter(i => i.status === 'MISSED').length;
-        const cancelled = subjectInstances.filter(i => i.status === 'CANCELLED').length;
-        const otherActivity = subjectInstances.filter(i => i.status === 'OTHER_ACTIVITY').length;
+        const attendedRaw = subjectInstances.filter(i => i.status === 'ATTENDED' || i.status === 'OTHER_ACTIVITY').length;
+        const missedRaw = subjectInstances.filter(i => i.status === 'MISSED').length;
+        const cancelledRaw = subjectInstances.filter(i => i.status === 'CANCELLED').length;
+        const otherActivityRaw = subjectInstances.filter(i => i.status === 'OTHER_ACTIVITY').length;
 
-        const totalConducted = totalScheduled - cancelled;
-        const attendancePercentage = totalConducted > 0 ? Math.round((attended / totalConducted) * 100) : 100;
+        // Apply weight for display (labs count as 2, lectures as 1)
+        const weight = subject.weight;
+        const attended = attendedRaw * weight;
+        const missed = missedRaw * weight;
+        const cancelled = cancelledRaw * weight;
+        const otherActivity = otherActivityRaw * weight;
+
+        const totalConductedRaw = totalScheduled - cancelledRaw;
+        const totalConducted = totalConductedRaw * weight;
+        const attendancePercentage = totalConductedRaw > 0 ? Math.round((attendedRaw / totalConductedRaw) * 100) : 100;
         const riskState = calculateRiskState(attendancePercentage);
 
-        const classesNeededForSafe = calculateClassesNeededForSafe(attended, totalConducted);
-        const classesCanMiss = calculateClassesCanMiss(attended, totalConducted);
+        const classesNeededForSafe = calculateClassesNeededForSafe(attendedRaw, totalConductedRaw);
+        const classesCanMiss = calculateClassesCanMiss(attendedRaw, totalConductedRaw);
 
         return {
             subjectId: subject.id,
