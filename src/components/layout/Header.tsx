@@ -12,8 +12,10 @@ interface HeaderProps {
 
 export function Header({ title, subtitle }: HeaderProps) {
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
         const timer = setInterval(() => {
             setCurrentTime(new Date());
         }, 1000);
@@ -45,7 +47,9 @@ export function Header({ title, subtitle }: HeaderProps) {
             {/* Right: Date/Time and User */}
             <div className="text-right">
                 <div className="text-sm font-medium text-slate-700">Siddhesh Sakle</div>
-                <div className="text-xs text-slate-500">{formatDateTime(currentTime)}</div>
+                <div className="text-xs text-slate-500">
+                    {mounted ? formatDateTime(currentTime) : ''}
+                </div>
             </div>
         </header>
     );
